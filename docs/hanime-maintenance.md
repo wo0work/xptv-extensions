@@ -17,7 +17,7 @@
 - 订阅文件：[subs/18.json](../subs/18.json)。
 - JS 直链：https://raw.githubusercontent.com/wo0work/xptv-extensions/main/js/hanime.js
 - 订阅直链：https://raw.githubusercontent.com/wo0work/xptv-extensions/main/subs/18.json
-- 当前脚本版本：v11；本地导入标识 csp_hanime_fixed_local_v11。
+- 当前脚本版本：v12；本地导入标识 csp_hanime_fixed_local_v12。
 - 用户实机版本：XPTV 4.23(196)，iPhone。
 
 通过 JS 文件导入的扩展需要重新下载、导入；GitHub 更新不会自动替换本地文件。订阅导入可先刷新订阅，但不能仅凭刷新按钮认定脚本缓存已更新，应检查版本并重新进入详情页。
@@ -94,6 +94,16 @@ v11 通过 Node 语法检查，以及使用 Cheerio 的 HTML 样例测试：
 - v10 播放修复：41ccac20ce4d17f83191aede00adcece18ae3211。
 - 订阅改为本仓库脚本：cce1f22bca98dcc4caec653c2674ea615b9bfc51。
 - v11 剧集清单修复：3979d963bfe651dfcb0fedafde3b3db70f16bc60。
+
+## v12：分类和搜索修复（2026-10-05）
+
+用户反馈除里番、泡面番外，其他分类选择后空白。检查真实页面发现 Motion Anime、3DCG、2.5D、2D动画、AI生成、MMD、Cosplay 使用新版 .horizontal-card > a.video-link，标题 .title，封面 img.main-thumb；旧版选择器匹配不到。v12 统一分类和搜索卡片解析，同时兼容旧版卡片并按视频 ID 去重。
+
+分类入口现在只保留本域名 /search?genre= 链接，移除站外游戏推广，保留真正的视频分类“新番预告”。不再依赖繁简体名称过滤。规范化中文和空格链接时避免重复编码已有百分号转义；翻页正确添加或替换 page 参数。播放解析和剧集提取逻辑未变。
+
+浏览器逐一核对 10 个视频分类均有对应卡片 DOM（里番、泡面番各 42 个选择器匹配项，其余新版分类通常 61 项，新番预告 20 项；含非视频项时由解析器过滤，这些数字不代表固定视频数量）。Node 语法、分类/搜索样例测试和既有剧集回归测试均通过，发布后读取 GitHub 文件确认与测试脚本一致。尚待用户 XPTV 实机反馈，不将浏览器 DOM 核对表述为实机加载成功。
+
+v12 提交：e5e40fcce60dda402803274caf8db540b6489dfa。
 
 ## 下次排查建议
 
