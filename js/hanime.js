@@ -4,7 +4,7 @@ const UA =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 let appConfig = {
-    ver: 10,
+    ver: 11,
     title: 'Hanime1（修正版）',
     site: 'https://hanime1.me',
 }
@@ -63,7 +63,38 @@ function normalizeHanimeArgs(value) {
 async function getTracks(ext) {
     ext = normalizeHanimeArgs(ext)
     if (!ext.url) throw new Error('缺少视频详情页地址')
-    return jsonify({ list: [{ title: '在线', tracks: [{ name: '播放', pan: '', ext: { url: ext.url } }] }] })
+    const tracks = []
+    const seen = {}
+    let groupTitle = '在线'
+    function addTrack(raw, name) {
+        if (typeof raw !== 'string') return
+        const match = raw.trim().replace(/&amp;/g, '&').match(/^(?:(?:https?:)?\/\/hanime1\.me)?\/watch\?(?:[^#]*&)?v=(\d+)(?:[&#]|$)/i)
+        if (!match || seen[match[1]]) return
+        seen[match[1]] = true
+        tracks.push({ name: (name || '').trim() || '视频 ' + match[1], pan: '', ext: { url: appConfig.site + '/watch?v=' + match[1] } })
+    }
+    try {
+        const { data } = await $fetch.get(ext.url, {
+            headers: { 'User-Agent': UA, Referer: appConfig.site + '/' },
+            timeout: 15000,
+        })
+        const $ = cheerio.load(data)
+        // Only read the playlist: unrelated recommendations are not episodes.
+        $('#playlist-scroll > div').each((_, element) => {
+            const row = $(element)
+            const href = row.attr('data-href') || row.find('.video-title a').attr('href') ||
+                row.find('a.overlay').attr('href') || row.find('a[href*="/watch?v="]').attr('href')
+            const name = row.find('.video-title').first().text() || row.find('.card-mobile-title').first().text()
+            addTrack(href, name)
+        })
+        if (tracks.length) groupTitle = $('#playlist-top-block a[href*="/playlist?"]').first().text().trim() || '剧集'
+        // Keep the selected video available if the site's playlist omits it.
+        addTrack(ext.url, $('#shareBtn-title').text().trim() || '当前视频')
+    } catch (error) {
+        if (typeof $print === 'function') $print('[hanime] 剧集清单读取失败，保留当前视频：' + (error.message || String(error)))
+    }
+    if (!tracks.length) tracks.push({ name: '播放', pan: '', ext: { url: ext.url } })
+    return jsonify({ list: [{ title: groupTitle, tracks: tracks }] })
 }
 async function getPlayinfo(ext) { return resolveHanimePlayback(normalizeHanimeArgs(ext)) }
 
@@ -158,5 +189,5 @@ async function search(ext) {
 }
 
 async function getLocalInfo() {
-    return jsonify({ ver: 10, name: 'Hanime1（修正版）', api: 'csp_hanime_fixed_local_v10' })
+    return jsonify({ ver: 11, name: 'Hanime1（修正版）', api: 'csp_hanime_fixed_local_v11' })
 }
