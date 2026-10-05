@@ -4,7 +4,7 @@ const UA =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 let appConfig = {
-    ver: 11,
+    ver: 12,
     title: 'Hanime1（修正版）',
     site: 'https://hanime1.me',
 }
@@ -16,40 +16,64 @@ async function getConfig() {
 }
 
 async function getTabs() {
-    let list = []
-    let ignore = ['新番預告', 'H漫畫']
-    function isIgnoreClassName(className) {
-        return ignore.some((element) => className.includes(element))
-    }
+    const list = []
     const { data } = await $fetch.get(appConfig.site, { headers: { 'User-Agent': UA } })
     const $ = cheerio.load(data)
     let allClass = $('#main-nav-home > a.nav-item')
     allClass.each((i, e) => {
-        const name = $(e).text()
+        const name = $(e).text().trim()
         const href = $(e).attr('href')
-        if (isIgnoreClassName(name)) return
-        list.push({ name, ext: { url: encodeURI(href) } })
+        const url = normalizeHanimeUrl(href)
+        if (!name || !/^https:\/\/hanime1\.me\/search\?[^#]*\bgenre=/i.test(url)) return
+        list.push({ name, ext: { url: url } })
     })
     return list
 }
 
 async function getCards(ext) {
     ext = normalizeHanimeArgs(ext)
-    let cards = []
-    let { page = 1, url } = ext
-    if (page > 1) url += `&page=${page}`
+    const url = hanimePageUrl(ext.url, ext.page || 1)
     const { data } = await $fetch.get(url, { headers: { 'User-Agent': UA } })
+    return jsonify({ list: parseHanimeCards(data) })
+}
+
+function normalizeHanimeUrl(raw) {
+    if (typeof raw !== 'string') return ''
+    let url = raw.trim().replace(/&amp;/g, '&')
+    if (url.indexOf('//') === 0) url = 'https:' + url
+    else if (url[0] === '/') url = appConfig.site + url
+    if (!/^https?:\/\//i.test(url)) return ''
+    return encodeURI(url).replace(/%25([0-9a-f]{2})/gi, '%$1')
+}
+
+function hanimePageUrl(raw, page) {
+    let url = normalizeHanimeUrl(raw)
+    if (!/^https:\/\/hanime1\.me(?:\/|$)/i.test(url)) throw new Error('无效的视频列表地址')
+    page = Math.max(1, Math.floor(Number(page) || 1))
+    url = url.split('#')[0]
+    if (/[?&]page=[^&]*/.test(url)) return url.replace(/([?&])page=[^&]*/, '$1page=' + page)
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'page=' + page
+}
+
+function parseHanimeCards(data) {
     const $ = cheerio.load(data)
-    let videolist = $('.home-rows-videos-wrapper > a')
-    if (videolist.length === 0) videolist = $('.content-padding-new > .row > .search-doujin-videos.col-xs-6')
+    const cards = []
+    const seen = {}
+    const videolist = $('.horizontal-card > a.video-link, .home-rows-videos-wrapper > a, .search-doujin-videos.col-xs-6')
     videolist.each((_, element) => {
-        const href = $(element).attr('href') || $(element).find('.overlay').attr('href')
-        const title = $(element).find('.home-rows-videos-title').text().trim() || $(element).find('.card-mobile-title').text().trim()
-        let cover = $(element).find('img').attr('src')
-        if (cover && cover.includes('background')) cover = $(element).find('img').eq(1).attr('src')
+        const row = $(element)
+        const href = normalizeHanimeUrl(row.attr('href') || row.find('a.overlay').attr('href'))
+        const id = (href.match(/^https:\/\/hanime1\.me\/watch\?v=(\d+)(?:[&#]|$)/i) || [])[1]
+        if (!id || seen[id]) return
+        const title = row.find('.title, .home-rows-videos-title, .card-mobile-title').first().text().trim()
+        if (!title) return
+        const images = row.find('img')
+        let cover = row.find('img.main-thumb').attr('src') || images.attr('src') || images.attr('data-src')
+        if (cover && cover.includes('background')) cover = images.eq(1).attr('src') || images.eq(1).attr('data-src') || cover
+        seen[id] = true
         cards.push({ vod_id: href, vod_name: title, vod_pic: cover, vod_remarks: '', ext: { url: href } })
     })
-    return jsonify({ list: cards })
+    return cards
 }
 
 function normalizeHanimeArgs(value) {
@@ -173,21 +197,9 @@ async function resolveHanimePlayback(ext) {
 
 async function search(ext) {
     ext = normalizeHanimeArgs(ext)
-    let cards = []
-    let text = encodeURIComponent(ext.text)
-    let page = ext.page || 1
-    let url = `${appConfig.site}/search?query=${text}&page=${page}`
-    const { data } = await $fetch.get(url, { headers: { 'User-Agent': UA } })
-    const $ = cheerio.load(data)
-    $('.col-xs-6').each((_, element) => {
-        const href = $(element).find('.overlay').attr('href')
-        const title = $(element).find('.card-mobile-title').text().trim()
-        const cover = $(element).find('img').eq(1).attr('src')
-        cards.push({ vod_id: href, vod_name: title, vod_pic: cover, vod_remarks: '', ext: { url: href } })
-    })
-    return jsonify({ list: cards })
+    return getCards({ url: appConfig.site + '/search?query=' + encodeURIComponent(ext.text || ''), page: ext.page || 1 })
 }
 
 async function getLocalInfo() {
-    return jsonify({ ver: 11, name: 'Hanime1（修正版）', api: 'csp_hanime_fixed_local_v11' })
+    return jsonify({ ver: 12, name: 'Hanime1（修正版）', api: 'csp_hanime_fixed_local_v12' })
 }
