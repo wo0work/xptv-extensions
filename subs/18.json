@@ -16,7 +16,7 @@
             "name": "Hanime1",
             "type": 3,
             "api": "csp_Hanime1",
-            "ext": "https://raw.githubusercontent.com/Yswag/xptv-extensions/main/js/hanime.js"
+            "ext": "https://raw.githubusercontent.com/wo0work/xptv-extensions/main/js/hanime.js"
         },
         {
             "name": "avtoday",
